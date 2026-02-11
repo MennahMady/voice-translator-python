@@ -2,11 +2,13 @@ from googletrans import Translator
 import pyttsx3
 import speech_recognition as sr
 
-# --- Setup Voice ---
+# --- NEW IMPORTS FOR ARABIC FIX ---
+import arabic_reshaper
+from bidi.algorithm import get_display
+
 engine = pyttsx3.init('sapi5')
 voices = engine.getProperty('voices')
 
-# Try to set a voice (Index 1 is usually a 2nd voice, Index 0 is default)
 try:
     engine.setProperty('voice', voices[1].id)
 except:
@@ -15,6 +17,14 @@ except:
 def speak(audio):
     engine.say(audio)
     engine.runAndWait()
+
+# --- HELPER FUNCTION TO FIX ARABIC DISPLAY ---
+def print_ar(text):
+    # 1. Reshape connects the letters (isolated -> connected)
+    reshaped_text = arabic_reshaper.reshape(text)
+    # 2. bidi flips it to Right-to-Left
+    bidi_text = get_display(reshaped_text)
+    print(bidi_text)
 
 def takeCommand():
     r = sr.Recognizer()
@@ -26,7 +36,6 @@ def takeCommand():
         try:
             audio = r.listen(source, timeout=5, phrase_time_limit=8)
             print("⏳ Recognizing...")
-            # Use 'en-US' for English input
             query = r.recognize_google(audio, language='en-US')
             print(f"✅ You Said: {query}\n")
         except Exception as e:
@@ -36,7 +45,7 @@ def takeCommand():
     return query
 
 def Translate():
-    speak("What should I Translate?")
+    speak("What should I translate?")
     sentence = takeCommand()
     
     if sentence == "None":
@@ -45,14 +54,15 @@ def Translate():
 
     trans = Translator()
     
-    # --- THIS WAS THE FIX ---
-    # Changed dest='ca' (Catalan) to dest='ar' (Arabic)
     try:
+        # Translating to Arabic ('ar')
         trans_sen = trans.translate(sentence, src='en', dest='ar')
         
-        print(f"📝 Arabic Translation: {trans_sen.text}")
+        # --- USE THE FIX HERE ---
+        print("📝 Translation (Corrected View):")
+        print_ar(trans_sen.text) 
         
-        # Note: This might not speak correctly if you don't have an Arabic voice installed
+        # Note: 'speak' might still struggle with Arabic audio if no Arabic voice is installed
         speak(trans_sen.text)
         
     except Exception as e:
