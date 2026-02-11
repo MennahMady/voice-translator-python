@@ -25,7 +25,7 @@ def takeCommand():
         query = r.recognize_google(audio, language='en-US')  # change if Arabic
         print(f"You Said: {query}\n")
 
-    except Exception as e:
+    except Exception as e: 
         print("Error:", e)
         print("Say that again Please...")
         speak("Say that again Please...")
