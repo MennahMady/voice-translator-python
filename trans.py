@@ -1,73 +1,95 @@
-from googletrans import Translator
-import pyttsx3
 import speech_recognition as sr
-
-# --- NEW IMPORTS FOR ARABIC FIX ---
+from googletrans import Translator
+from gtts import gTTS
+import os
+from playsound import playsound
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-engine = pyttsx3.init('sapi5')
-voices = engine.getProperty('voices')
+# --- 1. SETTINGS ---
+INPUT_LANG = 'en-US'  # What you speak
+TARGET_LANG = 'ar'    # What it translates to (Arabic)
 
-try:
-    engine.setProperty('voice', voices[1].id)
-except:
-    engine.setProperty('voice', voices[0].id)
+# --- 2. SPEAK FUNCTION (High Quality Google Voice) ---
+def speak(text, lang='en'):
+    #print(f"Speaking ({lang}): {text}")
+    try:
+        # Generate audio file from Google
+        tts = gTTS(text=text, lang=lang)
+        filename = "voice_output.mp3"
+        
+        # Remove old file if it exists (prevents permission errors)
+        if os.path.exists(filename):
+            os.remove(filename)
+            
+        # Save and Play
+        tts.save(filename)
+        playsound(filename)
+        
+        # Clean up
+        os.remove(filename)
+        
+    except Exception as e:
+        print(f"Audio Error: {e}")
 
-def speak(audio):
-    engine.say(audio)
-    engine.runAndWait()
-
-# --- HELPER FUNCTION TO FIX ARABIC DISPLAY ---
-def print_ar(text):
-    # 1. Reshape connects the letters (isolated -> connected)
+# --- 3. DISPLAY HELPER (Fixes Arabic visual bugs) ---
+def print_corrected_arabic(text):
+    # Reshape: Connects letters (e.g., م + ر -> مر)
     reshaped_text = arabic_reshaper.reshape(text)
-    # 2. bidi flips it to Right-to-Left
+    # Bidi: Reverses direction (Right-to-Left)
     bidi_text = get_display(reshaped_text)
-    print(bidi_text)
+    print(f"Translation (Terminal View): {bidi_text}")
 
+# --- 4. LISTENING FUNCTION ---
 def takeCommand():
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        print("🎤 Listening...")
+        print("Listening...")
+        # Calibrate mic for noise
         r.adjust_for_ambient_noise(source, duration=1)
         r.pause_threshold = 1
         
         try:
             audio = r.listen(source, timeout=5, phrase_time_limit=8)
-            print("⏳ Recognizing...")
-            query = r.recognize_google(audio, language='en-US')
-            print(f"✅ You Said: {query}\n")
+            print("Recognizing...")
+            query = r.recognize_google(audio, language=INPUT_LANG)
+            print(f"You Said: {query}\n")
+            return query
         except Exception as e:
-            print("❌ Error:", e)
-            return "None"
+            print("Error:", e)
+            return None
 
-    return query
-
+# --- 5. MAIN LOGIC ---
 def Translate():
-    speak("What should I translate?")
+    # Ask user for input
+    speak("What should I translate?", 'en')
+    
     sentence = takeCommand()
     
-    if sentence == "None":
-        speak("I didn't hear you.")
+    if sentence is None:
+        speak("I didn't hear anything.", 'en')
         return
 
-    trans = Translator()
-    
+    # Translate
+    translator = Translator()
     try:
-        # Translating to Arabic ('ar')
-        trans_sen = trans.translate(sentence, src='en', dest='ar')
+        translated = translator.translate(sentence, src='en', dest=TARGET_LANG)
+        arabic_text = translated.text
         
-        # --- USE THE FIX HERE ---
-        print("📝 Translation (Corrected View):")
-        print_ar(trans_sen.text) 
+        # A. Show it in terminal (Best effort)
+        print_corrected_arabic(arabic_text)
         
-        # Note: 'speak' might still struggle with Arabic audio if no Arabic voice is installed
-        speak(trans_sen.text)
+        # B. Save it to file (Perfect proof)
+        with open("translation_result.txt", "w", encoding="utf-8") as f:
+            f.write(arabic_text)
+        print("Saved perfect text to: translation_result.txt")
+
+        # C. Speak it (Perfect audio)
+        speak(arabic_text, TARGET_LANG)
         
     except Exception as e:
-        print("Translation Error:", e)
-        speak("Sorry, the translation failed.")
+        print(f"Translation Failed: {e}")
+        speak("Sorry, something went wrong.", 'en')
 
 if __name__ == "__main__":
     Translate()
