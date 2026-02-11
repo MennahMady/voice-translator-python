@@ -6,9 +6,24 @@ from playsound import playsound
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-# --- 1. SETTINGS ---
-INPUT_LANG = 'en-US'  # What you speak
-TARGET_LANG = 'ar'    # What it translates to (Arabic)
+# --- 1. SETTINGS & LANGUAGE SELECTION ---
+def select_language():
+    print("\n--- Select Language / اختر اللغة ---")
+    print("1. English (Speak English -> Translate to Arabic)")
+    print("2. Arabic  (Speak Arabic  -> Translate to English)")
+    choice = input("Enter number (1 or 2): ")
+    
+    if choice == '2':
+        # You speak Arabic ('ar-SA'), it translates to English ('en')
+        return 'ar-SA', 'en' 
+    else:
+        # Default: You speak English ('en-US'), it translates to Arabic ('ar')
+        return 'en-US', 'ar'
+
+# Run this function immediately to set the global variables
+INPUT_LANG, TARGET_LANG = select_language()
+
+print(f"Configured: Speaking {INPUT_LANG} -> Translating to {TARGET_LANG}\n")
 
 # --- 2. SPEAK FUNCTION (High Quality Google Voice) ---
 def speak(text, lang='en'):
