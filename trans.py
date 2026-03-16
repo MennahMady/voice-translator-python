@@ -1,5 +1,5 @@
 import speech_recognition as sr
-from googletrans import Translator
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from gtts import gTTS
 import os
 from playsound import playsound
@@ -14,102 +14,88 @@ def select_language():
     choice = input("Enter number (1 or 2): ")
     
     if choice == '2':
-        # You speak Arabic, it translates to English
-        return 'ar-SA', 'en' 
+        return 'ar-SA', 'en', "Helsinki-NLP/opus-mt-ar-en" 
     else:
-        # Default: You speak English, it translates to Arabic
-        return 'en-US', 'ar'
+        return 'en-US', 'ar', "Helsinki-NLP/opus-mt-en-ar"
 
-# Run detection immediately
-INPUT_LANG, TARGET_LANG = select_language()
-print(f"[+] Configured: Speaking {INPUT_LANG} -> Translating to {TARGET_LANG}\n")
+INPUT_LANG, TARGET_LANG, MODEL_NAME = select_language()
+print(f"Configured: Speaking {INPUT_LANG} -> Translating to {TARGET_LANG}\n")
 
-# --- 2. DISPLAY HELPER (Fixes Arabic visual bugs) ---
+# --- 2. INITIALIZE LOCAL ML MODEL (The Proper Way) ---
+print("Loading local Tokenizer and Model... (Downloading weights if first run)")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
+print("Model loaded successfully into memory!\n")
+
+# --- 3. DISPLAY HELPER ---
 def get_visually_correct_text(text):
     if text is None:
         return ""
-    # Only fix if the text contains Arabic characters
     if any("\u0600" <= char <= "\u06FF" for char in text):
         reshaped_text = arabic_reshaper.reshape(text)
         bidi_text = get_display(reshaped_text)
         return bidi_text
     return text
 
-# --- 3. SPEAK FUNCTION (High Quality Google Voice) ---
+# --- 4. SPEAK FUNCTION ---
 def speak(text, lang):
-    # Fix display before printing
     display_text = get_visually_correct_text(text)
     print(f"[Speaker] ({lang}): {display_text}")
-
     try:
-        # Generate audio file
         tts = gTTS(text=text, lang=lang)
         filename = "voice_output.mp3"
-        
-        # Clean up old file
         if os.path.exists(filename):
             os.remove(filename)
-            
-        # Save and Play
         tts.save(filename)
         playsound(filename)
         os.remove(filename)
-        
     except Exception as e:
-        print(f"[!] Audio Error: {e}")
+        print(f"Audio Error: {e}")
 
-# --- 4. LISTENING FUNCTION ---
+# --- 5. LISTENING FUNCTION ---
 def takeCommand():
     r = sr.Recognizer()
     with sr.Microphone() as source:
-        print("[*] Listening...")
+        print("Listening...")
         r.adjust_for_ambient_noise(source, duration=1)
         r.pause_threshold = 1
-        
         try:
             audio = r.listen(source, timeout=5, phrase_time_limit=8)
-            print("[*] Recognizing...")
-            # Uses the selected INPUT_LANG
+            print("Recognizing...")
             query = r.recognize_google(audio, language=INPUT_LANG)
-            
-            # Fix display in case user spoke Arabic
             display_query = get_visually_correct_text(query)
-            print(f"[>] You Said: {display_query}\n")
+            print(f"You Said: {display_query}\n")
             return query
         except Exception as e:
-            print("[!] Error:", e)
+            print("Error:", e)
             return None
 
-# --- 5. MAIN LOGIC ---
+# --- 6. MAIN LOGIC ---
 def Translate():
-    # Prompt the user to start
-    print("[*] Ready. Start speaking now.")
-    
+    print("Ready. Start speaking now.")
     sentence = takeCommand()
     
     if sentence is None:
         return
 
-    translator = Translator()
     try:
-        # Translate to the target language
-        translated = translator.translate(sentence, src='auto', dest=TARGET_LANG)
-        final_text = translated.text
+        # Run local ML inference directly!
+        print("Translating via local tensors...")
+        inputs = tokenizer(sentence, return_tensors="pt", padding=True)
+        translated_tokens = model.generate(**inputs)
+        final_text = tokenizer.decode(translated_tokens[0], skip_special_tokens=True)
         
-        # A. Show it in terminal (Fixed View)
         fixed_text = get_visually_correct_text(final_text)
-        print(f"[=] Translation: {fixed_text}")
+        print(f"Translation: {fixed_text}")
         
-        # B. Save it to file
         with open("translation_result.txt", "w", encoding="utf-8") as f:
             f.write(final_text)
-        print("[+] Saved to: translation_result.txt")
+        print("Saved to: translation_result.txt")
 
-        # C. Speak it
         speak(final_text, TARGET_LANG)
         
     except Exception as e:
-        print(f"[!] Translation Failed: {e}")
+        print(f"Translation Failed: {e}")
         speak("Sorry, something went wrong.", 'en')
 
 if __name__ == "__main__":
